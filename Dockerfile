@@ -68,4 +68,6 @@ COPY --from=builder-caddy /usr/bin/caddy /usr/bin/caddy
 
 VOLUME /mnt/data
 
+EXPOSE 61806
+
 ENTRYPOINT ["sh","-c","/workdir/entrypoint.sh"]
