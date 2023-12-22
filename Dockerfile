@@ -1,78 +1,9 @@
-FROM node:lts-alpine as builder
 # Stage 1 - Build the frontend
 FROM node:18-alpine3.18 AS node-build-env
 ARG TARGETPLATFORM
 ENV TARGETPLATFORM=${TARGETPLATFORM:-linux/amd64}
 ARG BUILDPLATFORM
 ENV BUILDPLATFORM=${BUILDPLATFORM:-linux/amd64}
-
-WORKDIR /metube
-
-RUN apk add git && \
-    git clone https://github.com/alexta69/metube && \
-    mv ./metube/ui/* ./ && \
-    npm ci && \
-    node_modules/.bin/ng build --configuration production
-
-
-FROM caddy:2.7.4-builder AS builder-caddy
-
-RUN xcaddy build \
-  --with github.com/caddy-dns/cloudflare@bfe272c8525b6dd8248fcdddb460fd6accfc4e84
-
-
-FROM python:3.8-alpine AS dist
-
-COPY ./content /workdir/
-
-WORKDIR /app
-
-ENV GLOBAL_USER=admin
-ENV GLOBAL_PASSWORD=password
-ENV CADDY_DOMAIN=http://localhost
-ENV CADDY_EMAIL=internal
-ENV CADDY_WEB_PORT=8080
-ENV GLOBAL_LANGUAGE=en
-ENV GLOBAL_PORTAL_PATH=/portal
-ENV PATH="/root/.local/bin:$PATH"
-ENV XDG_CONFIG_HOME=/mnt/data/config
-ENV DOWNLOAD_DIR=/mnt/data/videos
-ENV STATE_DIR=/mnt/data/videos/.metube
-ENV ARIA2_PORT=61800
-ENV FILEBROWSER_PORT=61801
-ENV METUBE_PORT=61802
-ENV OLIVETIN_PORT=61803
-ENV PYLOAD_PORT=61804
-ENV QBT_WEBUI_PORT=61805
-ENV RCLONE_PORT=61806
-ENV RCLONE_WEBDAV_PORT=61807
-
-RUN apk add --no-cache --update curl jq ffmpeg runit tzdata fuse3 p7zip bash findutils \
-    && python3 -m pip install --user --no-cache-dir pipx \
-    && apk add --no-cache --update --virtual .build-deps git curl-dev gcc g++ libffi-dev musl-dev jpeg-dev \
-    && pip install --no-cache-dir pipenv \
-    && git clone https://github.com/alexta69/metube \
-    && mv ./metube/Pipfile* ./metube/app ./metube/favicon ./ \
-    && pipenv install --system --deploy --clear \
-    && pip uninstall pipenv -y \
-    && pipx install --pip-args='--no-cache-dir' pyload-ng[plugins] \
-    && pipx install --pip-args='--no-cache-dir' gallery-dl \
-    && apk del .build-deps \
-    && wget -O - https://github.com/mayswind/AriaNg/releases/download/1.3.6/AriaNg-1.3.6.zip | busybox unzip -qd /workdir/ariang - \
-    && wget -O - https://github.com/rclone/rclone-webui-react/releases/download/v2.0.5/currentbuild.zip | busybox unzip -qd /workdir/rcloneweb - \
-    && wget -O - https://github.com/bastienwirtz/homer/releases/latest/download/homer.zip | busybox unzip -qd /workdir/homer - \
-    && wget -O - https://github.com/WDaan/VueTorrent/releases/latest/download/vuetorrent.zip | busybox unzip -qd /workdir - \
-    && chmod +x /workdir/service/*/run /workdir/service/*/log/run /workdir/aria2/*.sh /workdir/*.sh /workdir/dlpr /workdir/gdlr \
-    && /workdir/install.sh \
-    && rm -rf metube /workdir/install.sh /tmp/* ${HOME}/.cache /var/cache/apk/* \
-    && mv /workdir/ytdlp*.sh /workdir/dlpr /workdir/gdlr /usr/bin/ \
-    && ln -s /workdir/service/* /etc/service/
-
-COPY --from=builder /metube/dist/metube /app/ui/dist/metube
-
-COPY --from=builder-caddy /usr/bin/caddy /usr/bin/caddy
-
-VOLUME /mnt/data
 
 #build rdt-client
 
@@ -180,5 +111,75 @@ VOLUME [ "/data" ]
 HEALTHCHECK --interval=30s --timeout=30s --start-period=30s --retries=3 CMD curl --fail http://localhost:6500 || exit 
 
 #rdt-client done
+
+FROM node:lts-alpine as builder
+
+WORKDIR /metube
+
+RUN apk add git && \
+    git clone https://github.com/alexta69/metube && \
+    mv ./metube/ui/* ./ && \
+    npm ci && \
+    node_modules/.bin/ng build --configuration production
+
+
+FROM caddy:2.7.4-builder AS builder-caddy
+
+RUN xcaddy build \
+  --with github.com/caddy-dns/cloudflare@bfe272c8525b6dd8248fcdddb460fd6accfc4e84
+
+
+FROM python:3.8-alpine AS dist
+
+COPY ./content /workdir/
+
+WORKDIR /app
+
+ENV GLOBAL_USER=admin
+ENV GLOBAL_PASSWORD=password
+ENV CADDY_DOMAIN=http://localhost
+ENV CADDY_EMAIL=internal
+ENV CADDY_WEB_PORT=8080
+ENV GLOBAL_LANGUAGE=en
+ENV GLOBAL_PORTAL_PATH=/portal
+ENV PATH="/root/.local/bin:$PATH"
+ENV XDG_CONFIG_HOME=/mnt/data/config
+ENV DOWNLOAD_DIR=/mnt/data/videos
+ENV STATE_DIR=/mnt/data/videos/.metube
+ENV ARIA2_PORT=61800
+ENV FILEBROWSER_PORT=61801
+ENV METUBE_PORT=61802
+ENV OLIVETIN_PORT=61803
+ENV PYLOAD_PORT=61804
+ENV QBT_WEBUI_PORT=61805
+ENV RCLONE_PORT=61806
+ENV RCLONE_WEBDAV_PORT=61807
+
+RUN apk add --no-cache --update curl jq ffmpeg runit tzdata fuse3 p7zip bash findutils \
+    && python3 -m pip install --user --no-cache-dir pipx \
+    && apk add --no-cache --update --virtual .build-deps git curl-dev gcc g++ libffi-dev musl-dev jpeg-dev \
+    && pip install --no-cache-dir pipenv \
+    && git clone https://github.com/alexta69/metube \
+    && mv ./metube/Pipfile* ./metube/app ./metube/favicon ./ \
+    && pipenv install --system --deploy --clear \
+    && pip uninstall pipenv -y \
+    && pipx install --pip-args='--no-cache-dir' pyload-ng[plugins] \
+    && pipx install --pip-args='--no-cache-dir' gallery-dl \
+    && apk del .build-deps \
+    && wget -O - https://github.com/mayswind/AriaNg/releases/download/1.3.6/AriaNg-1.3.6.zip | busybox unzip -qd /workdir/ariang - \
+    && wget -O - https://github.com/rclone/rclone-webui-react/releases/download/v2.0.5/currentbuild.zip | busybox unzip -qd /workdir/rcloneweb - \
+    && wget -O - https://github.com/bastienwirtz/homer/releases/latest/download/homer.zip | busybox unzip -qd /workdir/homer - \
+    && wget -O - https://github.com/WDaan/VueTorrent/releases/latest/download/vuetorrent.zip | busybox unzip -qd /workdir - \
+    && chmod +x /workdir/service/*/run /workdir/service/*/log/run /workdir/aria2/*.sh /workdir/*.sh /workdir/dlpr /workdir/gdlr \
+    && /workdir/install.sh \
+    && rm -rf metube /workdir/install.sh /tmp/* ${HOME}/.cache /var/cache/apk/* \
+    && mv /workdir/ytdlp*.sh /workdir/dlpr /workdir/gdlr /usr/bin/ \
+    && ln -s /workdir/service/* /etc/service/
+
+COPY --from=builder /metube/dist/metube /app/ui/dist/metube
+
+COPY --from=builder-caddy /usr/bin/caddy /usr/bin/caddy
+
+VOLUME /mnt/data
 
 ENTRYPOINT ["sh","-c","/workdir/entrypoint.sh"]
