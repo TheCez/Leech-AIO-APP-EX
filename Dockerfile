@@ -1,3 +1,13 @@
+FROM node:lts-alpine as builder
+
+WORKDIR /metube
+
+RUN apk add git && \
+    git clone https://github.com/alexta69/metube && \
+    mv ./metube/ui/* ./ && \
+    npm ci && \
+    node_modules/.bin/ng build --configuration production
+
 # Stage 1 - Build the frontend
 FROM node:18-alpine3.18 AS node-build-env
 ARG TARGETPLATFORM
@@ -97,31 +107,11 @@ RUN \
 
 ENV PATH "$PATH:/usr/share/dotnet"
 
-# Copy files for app
-WORKDIR /app
-COPY --from=dotnet-build-env /appserver/server/out .
-COPY --from=node-build-env /appclient/client/out ./wwwroot
-COPY --from=node-build-env /appclient/root/ /
 
-# ports and volumes
-EXPOSE 6500
-VOLUME [ "/data" ]
 
-# Check Status
-HEALTHCHECK --interval=30s --timeout=30s --start-period=30s --retries=3 CMD curl --fail http://localhost:6500 || exit 
+
 
 #rdt-client done
-
-FROM node:lts-alpine as builder
-
-WORKDIR /metube
-
-RUN apk add git && \
-    git clone https://github.com/alexta69/metube && \
-    mv ./metube/ui/* ./ && \
-    npm ci && \
-    node_modules/.bin/ng build --configuration production
-
 
 FROM caddy:2.7.4-builder AS builder-caddy
 
@@ -180,6 +170,18 @@ COPY --from=builder /metube/dist/metube /app/ui/dist/metube
 
 COPY --from=builder-caddy /usr/bin/caddy /usr/bin/caddy
 
+# Copy files for app
+WORKDIR /app
+COPY --from=dotnet-build-env /appserver/server/out .
+COPY --from=node-build-env /appclient/client/out ./wwwroot
+COPY --from=node-build-env /appclient/root/ /
+
+# ports and volumes
+EXPOSE 6500
+VOLUME [ "/data" ]
 VOLUME /mnt/data
+
+# Check Status
+HEALTHCHECK --interval=30s --timeout=30s --start-period=30s --retries=3 CMD curl --fail http://localhost:6500 || exit 
 
 ENTRYPOINT ["sh","-c","/workdir/entrypoint.sh"]
